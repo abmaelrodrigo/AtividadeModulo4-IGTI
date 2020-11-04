@@ -1,0 +1,25 @@
+{
+  "name": "AtividadeModulo4-IGTI",
+  "version": "1.0.0",
+  "description": "Persistência de Dados, Versionamento de Código e Implantação",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abmaelrodrigo/AtividadeModulo4-IGTI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/abmaelrodrigo/AtividadeModulo4-IGTI/issues"
+  },
+  "homepage": "https://github.com/abmaelrodrigo/AtividadeModulo4-IGTI#readme",
+  "type": "module",
+  "dependencies": {
+    "express": "^4.17.1",
+    "mongoose": "^5.10.11"
+  }
+}
