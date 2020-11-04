@@ -3,16 +3,7 @@ import { accountModel } from '../models/accountModels.js';
 
 const app = express();
 
-app.get('/account', async (req, res) => {
-  const account = await accountModel.find({});
-  try {
-    res.send(account);
-  } catch (err) {
-    res.status(5000).send(err);
-  }
-});
-
-//Endpoint de deposito
+//1 - Endpoint de deposito
 app.patch('/account/deposito', async (req, res) => {
   try {
     const { agencia, conta, deposito } = req.body;
@@ -34,13 +25,11 @@ app.patch('/account/deposito', async (req, res) => {
   }
 });
 
-//Endpoint de saque
+//2 - Endpoint de saque
 app.patch('/account/saque', async (req, res) => {
   let { agencia, conta, saque } = req.body;
   saque = -(saque + 1);
   try {
-    //console.log(req.body);
-    //saque = -(saque + 1);
     const account = await accountModel.findOne({
       $and: [{ agencia: agencia }, { conta: conta }],
     });
@@ -66,27 +55,147 @@ app.patch('/account/saque', async (req, res) => {
   }
 });
 
-app.post('/account', async (req, res) => {
-  const account = new accountModel(req.body);
-
+//3 - endpoint de consulta
+app.get('/account/getClient', async (req, res) => {
+  const { agencia, conta, deposito } = req.body;
+  const account = await accountModel.find({});
   try {
-    await account.save();
+    const account = await accountModel.findOne({
+      $and: [{ agencia: agencia }, { conta: conta }],
+    });
+    if (!account) {
+      res.status(404).send('Conta nao encontroda na colecao');
+      return;
+    }
     res.send(account);
   } catch (err) {
     res.status(5000).send(err);
   }
 });
 
-app.delete('/account/:id', async (req, res) => {
+//5 - Endpoint de transferência:
+app.post('/account/transfer', async (req, res) => {
+  const { accountFrom, accountTo, value } = req.body;
+  let transferTax = 0;
+  let valueToBeTransfered = 0;
   try {
-    const id = req.params.id;
-    const student = await accountModel.findByIdAndDelete({ _id: id });
+    const bankBranchFrom = await accountModel.findOne(
+      { conta: accountFrom },
+      { _id: 0, agencia: 1, balance: 1 }
+    );
 
-    if (!student) {
+    const bankBranchTo = await accountModel.findOne(
+      { conta: accountTo },
+      { _id: 0, agencia: 1, balance: 1 }
+    );
+    console.log(bankBranchFrom.agencia);
+    console.log(bankBranchTo.agencia);
+
+    if (bankBranchFrom.agencia !== bankBranchTo.agencia) transferTax = 8;
+    valueToBeTransfered = value + transferTax;
+    console.log(valueToBeTransfered);
+
+    const destinyAccount = await accountModel.findOneAndUpdate(
+      {
+        $and: [{ agencia: bankBranchTo.agencia }, { conta: accountTo }],
+      },
+      { $inc: { balance: value } },
+      { new: true }
+    );
+
+    const newOriginAccountValue = bankBranchFrom.balance - valueToBeTransfered;
+    const originAccount = await accountModel.findOneAndUpdate(
+      {
+        $and: [{ agencia: bankBranchFrom.agencia }, { conta: accountFrom }],
+      },
+      { $set: { balance: newOriginAccountValue } },
+      { new: true }
+    );
+
+    //await account.save();
+    console.log(destinyAccount);
+    res.send(originAccount);
+  } catch (err) {
+    res.status(5000).send(err);
+  }
+});
+
+//4 - Endpoint delete
+app.delete('/account/delete', async (req, res) => {
+  const { agencia, conta } = req.body;
+  let numberOfAccounts = ' ';
+
+  try {
+    const account = await accountModel.findOneAndDelete({
+      $and: [{ agencia: agencia }, { conta: conta }],
+    });
+
+    if (!account) {
       res.status(404).send('Documento nao encontrodo na colecao');
       return;
     }
-    res.status(200).send();
+
+    let newNumberOfAccounts = await accountModel.aggregate([
+      {
+        $match: {
+          agencia: {
+            $eq: agencia,
+          },
+        },
+      },
+      {
+        $count: 'number_of_accounts',
+      },
+    ]);
+
+    res
+      .status(200)
+      .send(
+        `Número de contas ativas da agencia ${agencia}: ${newNumberOfAccounts[0].number_of_accounts}`
+      );
+  } catch (err) {
+    res.status(500).send(err);
+  }
+});
+
+//6 - endpoint de consulta da média de uma conta
+app.get('/account/getAverage', async (req, res) => {
+  const agencia = req.body.agencia;
+  //const account = await accountModel.find({agencia:agencia});
+  try {
+    //const account = await accountModel.find({ agencia });
+    //console.log(account);
+
+    const bankBranch = await accountModel.find({ agencia: agencia });
+    if (!bankBranch) {
+      res.status(404).send('Conta nao encontroda na colecao');
+      return;
+    }
+
+    let newNumberOfAccounts = await accountModel.aggregate([
+      {
+        $match: {
+          agencia: {
+            $eq: agencia,
+          },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          count: {
+            $avg: '$balance',
+          },
+        },
+      },
+    ]);
+    console.log(newNumberOfAccounts);
+    //${newNumberOfAccounts[0].number_of_accounts
+    res
+      .status(200)
+      .send(
+        `A média dos valores da agencia ${agencia} é: ${newNumberOfAccounts[0].count}`
+      );
   } catch (err) {
     res.status(500).send(err);
   }
