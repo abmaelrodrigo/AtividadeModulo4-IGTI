@@ -201,4 +201,70 @@ app.get('/account/getAverage', async (req, res) => {
   }
 });
 
+//7 - endpoint de consulta dos clientes com menor valor em conta
+app.post('/account/smallerBalance', async (req, res) => {
+  const limite = req.body.limite;
+
+  try {
+    const account = await accountModel
+      .find({}, { _id: 0, name: 0 })
+      .sort({ balance: 1 })
+      .limit(limite);
+    if (!account) {
+      res.status(404).send('Nenhum valor encontrado');
+      return;
+    }
+    res.send(account);
+  } catch (err) {
+    res.status(5000).send(err);
+  }
+});
+
+//8 - endpoint de consulta dos clientes com maior valor em conta
+app.post('/account/biggerBalance', async (req, res) => {
+  const limite = req.body.limite;
+
+  try {
+    const account = await accountModel
+      .find({}, { _id: 0 })
+      .sort({ balance: -1, name: 1 })
+      .limit(limite);
+    if (!account) {
+      res.status(404).send('Nenhum valor encontrado');
+      return;
+    }
+    //console.log(account[2]);
+    res.send(account);
+  } catch (err) {
+    res.status(5000).send(err);
+  }
+});
+
+//8 - endpoint dos clientes private
+app.post('/account/privateClients', async (req, res) => {
+  //const limite = req.body.limite;
+
+  try {
+    const accounts = await accountModel
+      .find({}, { _id: 0 })
+      .sort({ balance: -1 });
+    if (!accounts) {
+      res.status(404).send('Nenhum valor encontrado');
+      return;
+    }
+    let newArray = [];
+    for (var i = 0; i < accounts.length; i++) {
+      for (var j = 0; j < accounts.length; j++) {
+        if (accounts[i].agencia !== accounts[j].agencia) {
+          newArray.push(accounts[j]);
+        }
+      }
+    }
+
+    res.send(newArray);
+  } catch (err) {
+    res.status(5000).send(err);
+  }
+});
+
 export { app as accountRouter };
