@@ -1,4 +1,5 @@
 import express from 'express';
+import { formatNumber, formatMoney } from '../helpers/format.js';
 import { accountModel } from '../models/accountModels.js';
 
 const app = express();
@@ -16,7 +17,7 @@ app.patch('/account/deposito', async (req, res) => {
     );
 
     if (!account) {
-      res.status(404).send('Conta nao encontroda na colecao');
+      res.status(404).send('Conta nao encontrada na colecao');
       return;
     }
     res.status(200).send('Saldo na conta: ' + account.balance);
@@ -34,7 +35,7 @@ app.patch('/account/saque', async (req, res) => {
       $and: [{ agencia: agencia }, { conta: conta }],
     });
     if (!account) {
-      res.status(404).send('Conta nao encontroda na colecao');
+      res.status(404).send('Conta nao encontrada na colecao');
       return;
     }
     if (account.balance + saque < 0) {
@@ -55,66 +56,21 @@ app.patch('/account/saque', async (req, res) => {
   }
 });
 
-//3 - endpoint de consulta
-app.get('/account/getClient', async (req, res) => {
-  const { agencia, conta, deposito } = req.body;
-  const account = await accountModel.find({});
+//3 - endpoint de consulta do saldo
+app.post('/account/getClient', async (req, res) => {
+  const { agencia, conta } = req.body;
+  //const account = await accountModel.find({});
   try {
     const account = await accountModel.findOne({
       $and: [{ agencia: agencia }, { conta: conta }],
     });
     if (!account) {
-      res.status(404).send('Conta nao encontroda na colecao');
+      res.status(404).send('Conta nao encontrada na colecao');
       return;
     }
-    res.send(account);
-  } catch (err) {
-    res.status(5000).send(err);
-  }
-});
-
-//5 - Endpoint de transferência:
-app.post('/account/transfer', async (req, res) => {
-  const { accountFrom, accountTo, value } = req.body;
-  let transferTax = 0;
-  let valueToBeTransfered = 0;
-  try {
-    const bankBranchFrom = await accountModel.findOne(
-      { conta: accountFrom },
-      { _id: 0, agencia: 1, balance: 1 }
+    res.send(
+      `O saldo da conta ${conta} na agencia ${agencia} é: ${account.balance}`
     );
-
-    const bankBranchTo = await accountModel.findOne(
-      { conta: accountTo },
-      { _id: 0, agencia: 1, balance: 1 }
-    );
-    console.log(bankBranchFrom.agencia);
-    console.log(bankBranchTo.agencia);
-
-    if (bankBranchFrom.agencia !== bankBranchTo.agencia) transferTax = 8;
-    valueToBeTransfered = value + transferTax;
-    console.log(valueToBeTransfered);
-
-    const destinyAccount = await accountModel.findOneAndUpdate(
-      {
-        $and: [{ agencia: bankBranchTo.agencia }, { conta: accountTo }],
-      },
-      { $inc: { balance: value } },
-      { new: true }
-    );
-
-    const newOriginAccountValue = bankBranchFrom.balance - valueToBeTransfered;
-    const originAccount = await accountModel.findOneAndUpdate(
-      {
-        $and: [{ agencia: bankBranchFrom.agencia }, { conta: accountFrom }],
-      },
-      { $set: { balance: newOriginAccountValue } },
-      { new: true }
-    );
-
-    //await account.save();
-    console.log(destinyAccount);
-    res.send(originAccount);
   } catch (err) {
     res.status(5000).send(err);
   }
@@ -123,7 +79,6 @@ app.post('/account/transfer', async (req, res) => {
 //4 - Endpoint delete
 app.delete('/account/delete', async (req, res) => {
   const { agencia, conta } = req.body;
-  let numberOfAccounts = ' ';
 
   try {
     const account = await accountModel.findOneAndDelete({
@@ -131,7 +86,7 @@ app.delete('/account/delete', async (req, res) => {
     });
 
     if (!account) {
-      res.status(404).send('Documento nao encontrodo na colecao');
+      res.status(404).send('Documento nao encontrado na colecao');
       return;
     }
 
@@ -158,8 +113,68 @@ app.delete('/account/delete', async (req, res) => {
   }
 });
 
+//5 - Endpoint de transferência:
+app.post('/account/transfer', async (req, res) => {
+  const { accountFrom, accountTo, value } = req.body;
+  let transferTax = 0;
+  let valueToBeTransfered = 0;
+  try {
+    const bankBranchFrom = await accountModel.findOne(
+      { conta: accountFrom },
+      { _id: 0, agencia: 1, balance: 1 }
+    );
+
+    if (!bankBranchFrom) {
+      res.status(404).send(`Conta ${accountFrom} nao encontrada na colecao`);
+      return;
+    }
+
+    const bankBranchTo = await accountModel.findOne(
+      { conta: accountTo },
+      { _id: 0, agencia: 1, balance: 1 }
+    );
+
+    if (!bankBranchTo) {
+      res.status(404).send(`Conta ${accountTo} nao encontrada na colecao`);
+      return;
+    }
+
+    //console.log(bankBranchFrom.agencia);
+    //console.log(bankBranchTo.agencia);
+
+    if (bankBranchFrom.agencia !== bankBranchTo.agencia) transferTax = 8;
+    valueToBeTransfered = value + transferTax;
+    console.log(valueToBeTransfered);
+
+    const destinyAccount = await accountModel.findOneAndUpdate(
+      {
+        $and: [{ agencia: bankBranchTo.agencia }, { conta: accountTo }],
+      },
+      { $inc: { balance: value } },
+      { new: true }
+    );
+
+    const newOriginAccountValue = bankBranchFrom.balance - valueToBeTransfered;
+    const originAccount = await accountModel.findOneAndUpdate(
+      {
+        $and: [{ agencia: bankBranchFrom.agencia }, { conta: accountFrom }],
+      },
+      { $set: { balance: newOriginAccountValue } },
+      { new: true }
+    );
+
+    //await account.save();
+    console.log(destinyAccount);
+    res.send(
+      `O saldo da conta ${originAccount.conta} é: ${originAccount.balance}`
+    );
+  } catch (err) {
+    res.status(5000).send(err);
+  }
+});
+
 //6 - endpoint de consulta da média de uma conta
-app.get('/account/getAverage', async (req, res) => {
+app.post('/account/getAverage', async (req, res) => {
   const agencia = req.body.agencia;
   //const account = await accountModel.find({agencia:agencia});
   try {
@@ -168,7 +183,7 @@ app.get('/account/getAverage', async (req, res) => {
 
     const bankBranch = await accountModel.find({ agencia: agencia });
     if (!bankBranch) {
-      res.status(404).send('Conta nao encontroda na colecao');
+      res.status(404).send('Conta nao encontrada na colecao');
       return;
     }
 
@@ -194,7 +209,9 @@ app.get('/account/getAverage', async (req, res) => {
     res
       .status(200)
       .send(
-        `A média dos valores da agencia ${agencia} é: ${newNumberOfAccounts[0].count}`
+        `A média dos valores da agencia ${agencia} é: ${formatMoney(
+          newNumberOfAccounts[0].count
+        )}`
       );
   } catch (err) {
     res.status(500).send(err);
@@ -245,23 +262,35 @@ app.post('/account/privateClients', async (req, res) => {
   //const limite = req.body.limite;
 
   try {
-    const accounts = await accountModel
-      .find({}, { _id: 0 })
-      .sort({ balance: -1 });
-    if (!accounts) {
-      res.status(404).send('Nenhum valor encontrado');
-      return;
-    }
-    let newArray = [];
-    for (var i = 0; i < accounts.length; i++) {
-      for (var j = 0; j < accounts.length; j++) {
-        if (accounts[i].agencia !== accounts[j].agencia) {
-          newArray.push(accounts[j]);
-        }
-      }
-    }
+    const accounts = await accountModel.aggregate([
+      {
+        $sort: { balance: -1 },
+      },
 
-    res.send(newArray);
+      {
+        $group: {
+          _id: '$agencia',
+          id: { $first: '$_id' },
+          name: { $first: '$name' },
+          agencia: { $first: '$agencia' },
+          conta: { $first: '$conta' },
+          balance: { $first: '$balance' },
+        },
+      },
+    ]);
+
+    accounts.forEach(async (account) => {
+      await accountModel.findOneAndUpdate(
+        { _id: account.id },
+        {
+          $set: {
+            agencia: 99,
+          },
+        }
+      );
+    });
+    const accountsOfPrivateAggency = await accountModel.find({ agencia: 99 });
+    res.send(accountsOfPrivateAggency);
   } catch (err) {
     res.status(5000).send(err);
   }
