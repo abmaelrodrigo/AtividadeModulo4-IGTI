@@ -1,0 +1,1 @@
+web: nodemy-bank-api.js
